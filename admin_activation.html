@@ -7,66 +7,21 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         body { background: #0f0c29; color: white; font-family: 'Poppins', sans-serif; padding: 20px; }
-        
-        .header { display: flex; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #333; padding-bottom: 15px; }
-        .back-btn { color: #aaa; text-decoration: none; font-size: 1.1rem; margin-right: 15px; transition: 0.3s; }
-        .back-btn:hover { color: #fff; }
-
         .container { max-width: 900px; margin: 0 auto; }
-
-        .req-card { 
-            background: #1a1a2e; padding: 20px; border-radius: 12px; 
-            margin-bottom: 15px; border: 1px solid #333; 
-            border-left: 5px solid #f39c12; 
-            display: flex; flex-direction: column; gap: 10px;
-            animation: fadeIn 0.3s ease;
-        }
-        @keyframes fadeIn { from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:translateY(0)} }
-
-        .row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-        
-        .label { color: #aaa; font-size: 0.85rem; }
-        .val { color: #fff; font-weight: 600; font-family: monospace; letter-spacing: 0.5px; }
-        .val.wallet { color: #00d2d3; word-break: break-all; }
-        .val.trx { color: #f39c12; }
-        
-        .actions { display: flex; gap: 10px; margin-top: 10px; }
-        
-        button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; flex: 1; }
-        button:active { transform: scale(0.98); }
-        .btn-approve { background: #00f260; color: #000; }
-        .btn-approve:disabled { background: #555; color: #aaa; cursor: not-allowed; }
-        .btn-reject { background: #ff4757; color: white; }
-
-        /* Toast Notification */
-        #toast-box { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
-        .toast { background: #1e1e2f; color: white; min-width: 280px; padding: 15px 20px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); border-left: 5px solid #00f260; display: flex; align-items: center; gap: 15px; animation: slideIn 0.3s ease-out forwards; }
-        .toast.error { border-left-color: #ff4757; }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .req-card { background: #1a1a2e; padding: 20px; border-radius: 12px; margin-bottom: 15px; border-left: 5px solid #f39c12; }
+        .btn-approve { background: #00f260; color: #000; border:none; padding:10px; cursor:pointer; width:100%; font-weight:bold; border-radius:5px;}
     </style>
 </head>
 <body>
-
-    <div id="toast-box"></div>
-
     <div class="container">
-        <div class="header">
-            <a href="admin_dashboard.html" class="back-btn"><i class="fas fa-arrow-left"></i> Back</a>
-            <h2>Pending Requests</h2>
-        </div>
-
-        <div id="list">
-            <div style="text-align:center; color:#777; margin-top:50px;">
-                <i class="fas fa-circle-notch fa-spin"></i> Loading requests...
-            </div>
-        </div>
+        <h2>Pending Requests</h2>
+        <div id="list">Loading...</div>
     </div>
 
-    <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script>
-        // UPDATED FIREBASE CONFIGURATION
         const firebaseConfig = {
             apiKey: "AIzaSyBEEkp40hJF81XaLVa9DNPWX-aDy_0oEUE",
             authDomain: "shopping28-84906.firebaseapp.com",
@@ -76,164 +31,88 @@
             messagingSenderId: "252107906792",
             appId: "1:252107906792:web:d39b0be25c88e07015b35d"
         };
-        
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
+        const RATE = 120; // 1 USD = 120 BDT
 
-        // Toast Function
-        function showToast(msg, type = 'success') {
-            const box = document.getElementById('toast-box');
-            const t = document.createElement('div');
-            t.className = `toast ${type}`;
-            t.innerHTML = type === 'success' ? `<i class="fas fa-check-circle" style="color:#00f260"></i> ${msg}` : `<i class="fas fa-times-circle" style="color:#ff4757"></i> ${msg}`;
-            box.appendChild(t);
-            setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300) }, 3000);
-        }
-
-        // Realtime Listener
         db.ref('activation_requests').orderByChild('status').equalTo('pending').on('value', (snapshot) => {
             const list = document.getElementById('list'); 
             list.innerHTML = "";
-            
-            if(!snapshot.exists()) { 
-                list.innerHTML = "<div style='text-align:center; color:#777; margin-top:50px;'>No pending requests found.</div>"; 
-                return; 
-            }
+            if(!snapshot.exists()) { list.innerHTML = "<p>No pending requests.</p>"; return; }
             
             snapshot.forEach((child) => {
                 const d = child.val();
-                const html = `
-                <div class="req-card" id="card-${child.key}">
-                    <div class="row">
-                        <div>
-                            <div class="label">Sender Wallet</div>
-                            <div class="val wallet">${d.senderWallet || 'N/A'}</div>
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div>
-                            <div class="label">Transaction ID (TrxID)</div>
-                            <div class="val trx">${d.trxId}</div>
-                        </div>
-                        <div style="text-align:right;">
-                            <div class="label">Amount</div>
-                            <div class="val">$${d.amount}</div>
-                        </div>
-                    </div>
-                    
-                    <div class="actions">
-                        <button id="btn-${child.key}" class="btn-approve" onclick="approve('${child.key}', '${d.uid}')">
-                            <i class="fas fa-check"></i> APPROVE & ACTIVATE
-                        </button>
-                        <button class="btn-reject" onclick="reject('${child.key}')">
-                            <i class="fas fa-times"></i> REJECT
-                        </button>
-                    </div>
+                list.innerHTML += `
+                <div class="req-card">
+                    <p>UID: ${d.uid}</p>
+                    <p>TrxID: ${d.trxId}</p>
+                    <button class="btn-approve" onclick="approve('${child.key}', '${d.uid}')">APPROVE & DISTRIBUTE</button>
                 </div>`;
-                list.innerHTML = html + list.innerHTML; // Newest top
             });
         });
 
-        // === MAIN APPROVE LOGIC ===
         async function approve(key, uid) {
-            const btn = document.getElementById('btn-' + key);
-            if(btn) { btn.disabled = true; btn.innerText = "Processing..."; }
+            if(!confirm("Approve and Distribute Commission?")) return;
 
-            try {
-                const reqRef = db.ref('activation_requests/' + key);
-                const userRef = db.ref('users/' + uid);
+            // 1. Get Commission Settings (Level 1, 2, 3 amounts in USD)
+            const settingsSnap = await db.ref('settings/referral_levels').once('value');
+            const levelsConfig = settingsSnap.val() || []; // Example: [{level:1, amount:120}, {level:2, amount:60}] (BDT)
 
-                // 1. Double check status (Security)
-                const reqSnap = await reqRef.once('value');
-                if (!reqSnap.exists() || reqSnap.val().status !== 'pending') {
-                    showToast("Request handled by another admin!", "error"); return;
-                }
+            // 2. Get User Info to find Referrer
+            const userSnap = await db.ref('users/' + uid).once('value');
+            const user = userSnap.val();
+            
+            if (user.status === 'active') return alert("Already Active!");
 
-                // 2. Check User Status
-                const userSnap = await userRef.once('value');
-                const user = userSnap.val();
-                if (!user) { showToast("User data missing!", "error"); return; }
-                if (user.status === 'active') {
-                    await reqRef.update({status: 'approved_duplicate', note: 'Already active'});
-                    showToast("User was already active.", "error"); return;
-                }
-
-                // 3. Load Dynamic Settings (The crucial part)
-                // We check 'commissions_dynamic' array first, fallback to old if missing
-                const setSnap = await db.ref('settings').once('value');
-                const settings = setSnap.val() || {};
-                
-                let dynamicRates = [];
-                if(settings.commissions_dynamic) {
-                    dynamicRates = settings.commissions_dynamic;
-                } else if(settings.commissions) {
-                    // Fallback to old 3 level system
-                    dynamicRates = [
-                        {level: 1, amount: settings.commissions.level1},
-                        {level: 2, amount: settings.commissions.level2},
-                        {level: 3, amount: settings.commissions.level3}
-                    ];
-                }
-
-                // 4. Distribute Bonus Dynamically
-                if(user.referredBy && user.referredBy !== "the_art2000") {
-                    await distributeDynamic(user.referredBy, 1, dynamicRates);
-                }
-
-                // 5. Activate User & Lock Rates
-                await userRef.update({ 
-                    status: 'active', 
-                    activatedAt: firebase.database.ServerValue.TIMESTAMP,
-                    locked_commissions: dynamicRates // Save current structure for history
-                });
-                
-                // 6. Finalize Request
-                await reqRef.update({ status: 'approved' });
-
-                showToast("Activation Successful!", "success");
-
-            } catch (error) {
-                console.error(error);
-                showToast("Error: " + error.message, "error");
-                if(btn) { btn.disabled = false; btn.innerText = "RETRY"; }
+            // 3. Recursive Commission Distribution
+            if(user.referredBy && user.referredBy !== "the_art2000") {
+                await distributeCommission(user.referredBy, 1, levelsConfig, user.ownCode);
             }
+
+            // 4. Activate User
+            await db.ref('users/' + uid).update({ 
+                status: 'active', 
+                activatedAt: firebase.database.ServerValue.TIMESTAMP 
+            });
+            
+            // 5. Update Request Status
+            await db.ref('activation_requests/' + key).update({ status: 'approved' });
+
+            alert("Account Activated & Commission Distributed!");
         }
 
-        // Recursive Distribution Function
-        async function distributeDynamic(currentUplineCode, currentLevel, ratesConfig) {
-            // Find rate for current level (Array index is level-1)
-            const rateObj = ratesConfig.find(r => r.level === currentLevel);
+        // --- CORE MLM LOGIC ---
+        async function distributeCommission(currentUplineCode, currentLevel, config, sourceUserCode) {
+            // Find config for this level (Array index is level-1)
+            // config format from settings: [{level:1, amount: 120}, {level:2, amount: 60}] (Saved as BDT)
+            const levelSettings = config.find(c => c.level === currentLevel);
             
-            // If no rate defined for this level (e.g. Level 4 but only 3 set), stop.
-            if(!rateObj) return;
+            // If no settings for this level (e.g. Level 5 reached but only 3 set), STOP.
+            if(!levelSettings || levelSettings.amount <= 0) return;
 
-            // Find the upline user by Code
+            // Find the Upline User by Code
             const snap = await db.ref('users').orderByChild('ownCode').equalTo(currentUplineCode).once('value');
             
             if(snap.exists()) {
                 const uplineUid = Object.keys(snap.val())[0];
                 const uplineData = Object.values(snap.val())[0];
+                const amountBDT = parseFloat(levelSettings.amount);
 
-                const bonusAmount = parseFloat(rateObj.amount);
-                
-                // Give Money if amount > 0
-                if(bonusAmount > 0) {
-                    await db.ref('users/'+uplineUid).update({
-                        balance: (parseFloat(uplineData.balance) || 0) + bonusAmount
-                    });
-                }
+                // A. Add Money to Balance
+                await db.ref('users/' + uplineUid + '/balance').transaction(bal => (bal || 0) + amountBDT);
 
-                // Continue to next level up, if referrer exists
+                // B. Record History (For My Team Page)
+                await db.ref('users/' + uplineUid + '/commission_history').push({
+                    fromUser: sourceUserCode, // Who joined?
+                    level: currentLevel,      // Which level commission?
+                    amount: amountBDT,        // How much BDT?
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
+
+                // C. Recurse to Next Upline (Go up the chain)
                 if(uplineData.referredBy && uplineData.referredBy !== "the_art2000") {
-                    await distributeDynamic(uplineData.referredBy, currentLevel + 1, ratesConfig);
+                    await distributeCommission(uplineData.referredBy, currentLevel + 1, config, sourceUserCode);
                 }
-            }
-        }
-
-        function reject(key) { 
-            if(confirm("Are you sure you want to REJECT this payment?")) {
-                db.ref('activation_requests/'+key).update({status:'rejected'}); 
-                showToast("Request Rejected", "error");
             }
         }
     </script>
